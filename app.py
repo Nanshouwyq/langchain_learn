@@ -4,51 +4,79 @@ from functools import partial
 from uuid import uuid4
 
 import gradio as gr
-from langchain_core.messages import AIMessage
+from langchain_core.messages import AIMessage, AIMessageChunk
 
 from note_assistant.agent import create_note_agent, get_agent_config
 
 agent = create_note_agent()
 
 
-def _extract_reply(result) -> str:
-    """从 agent 返回的 messages 中取出最后一条助手回复"""
-    messages = result.get("messages") or []
-    for message in reversed(messages):
-        if isinstance(message, AIMessage) and message.content:
-            content = message.content
-            if isinstance(content, list):
-                texts = [
-                    part.get("text", "")
-                    for part in content
-                    if isinstance(part, dict) and part.get("type") == "text"
-                ]
-                content = "".join(texts) or str(content)
-            return str(content).strip()
-    return "暂时没有得到有效回复，请稍后再试。"
+def _chunk_text(chunk) -> str:
+    """从流式 chunk 中取出文本增量"""
+    content = getattr(chunk, "content", None)
+    if not content:
+        return ""
+    if isinstance(content, str):
+        return content
+    if isinstance(content, list):
+        parts = []
+        for part in content:
+            if isinstance(part, dict) and part.get("type") == "text":
+                parts.append(part.get("text", ""))
+            elif isinstance(part, str):
+                parts.append(part)
+        return "".join(parts)
+    return str(content)
 
 
 def chat(message: str, history: list, session_id: str):
-    """发送一条用户消息并更新对话历史"""
+    """发送一条用户消息，并以流式方式更新助手回复"""
     message = (message or "").strip()
     if not message:
-        return history, ""
+        yield history, ""
+        return
 
     history = list(history or [])
     history.append({"role": "user", "content": message})
+    history.append({"role": "assistant", "content": "思考中..."})
+    yield history, ""
 
+    reply = ""
+    # 工具调用后开启新一轮模型输出时，清空缓冲，只展示最终回答
+    reset_after_tools = False
     try:
         config = get_agent_config(session_id, thread_id=session_id)
-        result = agent.invoke(
+        for chunk, _metadata in agent.stream(
             {"messages": [{"role": "user", "content": message}]},
             config=config,
-        )
-        reply = _extract_reply(result)
-    except Exception as e:
-        reply = f"处理失败: {e}"
+            stream_mode="messages",
+        ):
+            if not isinstance(chunk, (AIMessage, AIMessageChunk)):
+                continue
+            if getattr(chunk, "tool_call_chunks", None) or getattr(
+                chunk, "tool_calls", None
+            ):
+                reset_after_tools = True
+                continue
+            text = _chunk_text(chunk)
+            if not text:
+                continue
+            if reset_after_tools:
+                reply = ""
+                reset_after_tools = False
+            reply += text
+            history[-1] = {"role": "assistant", "content": reply}
+            yield history, ""
 
-    history.append({"role": "assistant", "content": reply})
-    return history, ""
+        if not reply:
+            history[-1] = {
+                "role": "assistant",
+                "content": "暂时没有得到有效回复，请稍后再试。",
+            }
+            yield history, ""
+    except Exception as e:
+        history[-1] = {"role": "assistant", "content": f"处理失败: {e}"}
+        yield history, ""
 
 
 def clear_chat():
@@ -58,7 +86,7 @@ def clear_chat():
 
 def quick_chat(prompt: str, history: list, session_id: str):
     """快捷问题：直接把预设文案当作用户输入发送"""
-    return chat(prompt, history, session_id)
+    yield from chat(prompt, history, session_id)
 
 
 def create_interface():
