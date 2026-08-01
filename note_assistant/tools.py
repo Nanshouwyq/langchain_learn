@@ -2,10 +2,10 @@
 
 from langchain_core.messages.utils import filter_messages
 from langchain_core.tools import tool
-from models import NoteCreate
+from .models import NoteCreate
 from pathlib import Path
-from config import NOTES_DIR
-from chains import rebuild_vectorstore, ask_notes
+from .config import NOTES_DIR
+from .chains import rebuild_vectorstore, ask_notes
 
 
 def _note_path(title: str) -> Path:
@@ -104,19 +104,19 @@ def answer_from_notes(question: str) -> str:
 
 
 ALL_TOOLS = [create_note, list_notes, update_note, delete_note, answer_from_notes]
-if __name__ == "__main__":
-    # print(list_notes.invoke({"tag": ""}))
-    # 测试创建笔记
-    print(
-        create_note.invoke(
-            {"title": "测试笔记", "content": "这是测试笔记的内容", "tags": "测试,笔记"}
-        )
-    )
+# if __name__ == "__main__":
+#     # print(list_notes.invoke({"tag": ""}))
+#     # 测试创建笔记
+#     print(
+#         create_note.invoke(
+#             {"title": "测试笔记", "content": "这是测试笔记的内容", "tags": "测试,笔记"}
+#         )
+#     )
 
-    print(
-        update_note.invoke(
-            {"title": "测试笔记", "content": "这是更新后的测试笔记的内容"}
-        )
-    )
+#     print(
+#         update_note.invoke(
+#             {"title": "测试笔记", "content": "这是更新后的测试笔记的内容"}
+#         )
+#     )
 
-    print(delete_note.invoke({"title": "测试笔记"}))
+#     print(delete_note.invoke({"title": "测试笔记"}))

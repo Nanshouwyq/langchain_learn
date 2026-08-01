@@ -8,7 +8,7 @@ import shutil
 import time
 from chromadb import Key
 from chromadb.types import C
-from config import (
+from .config import (
     MOONSHOT_MODEL,
     MOONSHOT_API_KEY,
     MOONSHOT_BASE_URL,
@@ -309,7 +309,7 @@ def ask_notes(question: str) -> str:
     return rag_chain.invoke(question)
 
 
-if __name__ == "__main__":
-    chain = ask_notes("我是一个新手，不知道langchain 请帮我介绍一下")
-    print("---------chain---------")
-    print(chain)
+# if __name__ == "__main__":
+#     chain = ask_notes("我是一个新手，不知道langchain 请帮我介绍一下")
+#     print("---------chain---------")
+#     print(chain)
