@@ -23,6 +23,7 @@ from .config import (
     RETEIEVER_K,
     VECTOR_STORE_STATE_FILE,
     VECTORE_DB_FILE,
+    ENABLE_QUERY_REWRITE,
 )
 
 
@@ -35,24 +36,42 @@ from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.runnables import RunnablePassthrough
 
+_llm = None
+_embedding_model = None
+_rag_chain = None
+_vectorstore_checked_ok = False
+
 
 def get_llm() -> ChatOpenAI:
-    return ChatOpenAI(
-        model=MOONSHOT_MODEL,
-        api_key=MOONSHOT_API_KEY,
-        base_url=MOONSHOT_BASE_URL,
-        temperature=1,
-    )
+    global _llm
+    if _llm is None:
+        _llm = ChatOpenAI(
+            model=MOONSHOT_MODEL,
+            api_key=MOONSHOT_API_KEY,
+            base_url=MOONSHOT_BASE_URL,
+            temperature=1,
+        )
+    return _llm
 
 
 # 获取嵌入模型
 def get_embedding_model() -> OpenAIEmbeddings:
-    return OpenAIEmbeddings(
-        model=SILICONFLOW_MODEL,
-        api_key=SILICONFLOW_API_KEY,
-        base_url=SILICONFLOW_BASE_URL,
-        check_embedding_ctx_length=False,
-    )
+    global _embedding_model
+    if _embedding_model is None:
+        _embedding_model = OpenAIEmbeddings(
+            model=SILICONFLOW_MODEL,
+            api_key=SILICONFLOW_API_KEY,
+            base_url=SILICONFLOW_BASE_URL,
+            check_embedding_ctx_length=False,
+        )
+    return _embedding_model
+
+
+def _invalidate_rag_cache():
+    """笔记变更 / 重建向量库后清空缓存"""
+    global _rag_chain, _vectorstore_checked_ok
+    _rag_chain = None
+    _vectorstore_checked_ok = False
 
 
 def load_note_documents() -> list[Document]:
@@ -87,7 +106,10 @@ def split_documents(documents):
 def _build_retrieval_context(question: str, retriver) -> str:
     """构建检索上下文"""
     raw_documents = retriver.invoke(question)
-    # 使用改写后的用户问题得到的检索结果
+    if not ENABLE_QUERY_REWRITE:
+        return "\n\n".join(document.page_content for document in raw_documents)
+
+    # 使用改写后的用户问题得到的检索结果（多一次 LLM，默认关闭以加速）
     rewritten_question = rewrite_query_for_retrieval(question)
     print(f"rewritten_question: {rewritten_question}")
     if rewritten_question == question:
@@ -142,6 +164,7 @@ def _merge_documents(documents) -> list:
 
 def clear_vector_store():
     """清空本地向量库"""
+    _invalidate_rag_cache()
     vectorstore = None
     client = None
     try:
@@ -193,17 +216,24 @@ def _noted_changed() -> bool:
 
 
 def vectorstore_need_rebuild() -> bool:
+    global _vectorstore_checked_ok
     note_paths = list(NOTES_DIR.rglob("*.md"))
     if not note_paths:
         return False
     # 没有sqlite 文件，说明本地向量库没有新建
     if not VECTORE_DB_FILE.exists():
+        _vectorstore_checked_ok = False
         return True
     # 文档比建库时间更新，说明本地向量库还没建出来
     if _noted_changed():
+        _vectorstore_checked_ok = False
         return True
+    # 日常问答：文件与时间戳都正常时跳过打开 Chroma 的空库检查
+    if _vectorstore_checked_ok:
+        return False
+
     vectorstore = None
-    clinet = None
+    client = None
     try:
         vectorstore = Chroma(
             collection_name=VECTOR_STORE_COLLECTION_NAME,
@@ -212,9 +242,11 @@ def vectorstore_need_rebuild() -> bool:
         )
         client = vectorstore._client
         # 检查 collection 是否为空 ，防止向量库文件存在但collection 没有入库数据（如数据库贝手动删除或者损坏）导致检索失败
-
-        return vectorstore._collection.count() == 0
+        empty = vectorstore._collection.count() == 0
+        _vectorstore_checked_ok = not empty
+        return empty
     except Exception:
+        _vectorstore_checked_ok = False
         return True
     finally:
         try:
@@ -254,11 +286,13 @@ def rebuild_vectorstore():
     clear_vector_store()
     vectorstore = create_vectorstore(chunks)
     _write_build_timestamp()
+    _invalidate_rag_cache()
     return vectorstore
 
 
 def build_rag_chain():
-    """构建面向笔记问答的RAG链"""
+    """构建面向笔记问答的RAG链（带缓存，避免每次问答都重新连库）"""
+    global _rag_chain
     # 当没有笔记时，清空本地向量库并返回NONE
     if not list(NOTES_DIR.rglob("*.md")):
         clear_vector_store()
@@ -266,6 +300,9 @@ def build_rag_chain():
     # 日常问答只读取本地向量库：首次使用或者文档变更时，再统一全量重建一次
     if vectorstore_need_rebuild():
         rebuild_vectorstore()
+    if _rag_chain is not None:
+        return _rag_chain
+
     # 读取chroma db内容
     vectorstore = Chroma(
         collection_name=VECTOR_STORE_COLLECTION_NAME,
@@ -281,11 +318,12 @@ def build_rag_chain():
         请先判断哪些片段和问题最相关，忽略无关内容。
         如果检索内容里有相关问题的定义或者实例，请直接引用，不要用自己的话重复。
         如果笔记中没有相关信息，请明确告知用户
+        回答尽量简洁。
        
         """
     )
     # 返回构建的RAG链
-    return (
+    _rag_chain = (
         {
             # lambda 是「匿名函数」：写法为 lambda 参数: 表达式，相当于临时定义一个小函数。
             # 下面这行意思是：拿到 question 后，调用 _build_retrieval_context(question) 作为 context。
@@ -299,6 +337,7 @@ def build_rag_chain():
         | get_llm()
         | StrOutputParser()
     )
+    return _rag_chain
 
 
 def ask_notes(question: str) -> str:

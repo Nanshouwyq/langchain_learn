@@ -41,5 +41,7 @@ TEMPERATURE = 0.1
 CHUNK_SIZE = 500
 CHUNK_OVERLAP = 50
 RETEIEVER_K = 3
+# 查询改写会多一次 LLM 调用；关掉可明显加速日常问答
+ENABLE_QUERY_REWRITE = False
 VECTOR_STORE_COLLECTION_NAME = "note_assistant"
 DEFAULT_THREAD_ID = "note_assistant"

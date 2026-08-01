@@ -169,8 +169,23 @@ def create_interface():
 
 
 if __name__ == "__main__":
+    import os
+
+    # 避免系统 HTTP 代理把 localhost 启动自检转到代理上（常见 502）
+    for key in (
+        "HTTP_PROXY",
+        "HTTPS_PROXY",
+        "ALL_PROXY",
+        "http_proxy",
+        "https_proxy",
+        "all_proxy",
+    ):
+        os.environ.pop(key, None)
+    os.environ["NO_PROXY"] = "127.0.0.1,localhost,::1"
+    os.environ["no_proxy"] = "127.0.0.1,localhost,::1"
+
     create_interface().launch(
-        server_name="0.0.0.0",
+        server_name="127.0.0.1",
         server_port=7860,
         share=False,
         inbrowser=True,
