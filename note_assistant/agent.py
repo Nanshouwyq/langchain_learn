@@ -43,26 +43,4 @@ def get_agent_config(session_id, thread_id=None) -> dict:
     }
 
 
-# if __name__ == "__main__":
-#     config = get_agent_config("123", "456")
-#     print(config)
-#     agent = create_note_agent()
-
-#     def ask(text: str):
-#         return agent.invoke(
-#             {"messages": [{"role": "user", "content": text}]},
-#             config=config,
-#         )
-
-#     print(
-#         ask(
-#             "创建一个笔记，标题为：笔记助手，内容为：笔记助手是一个帮助用户管理笔记的工具"
-#         )
-#     )
-#     print(ask("列出所有笔记"))
-#     print(ask("更新笔记助手，内容为：笔记助手是一个帮助用户管理笔记的工具"))
-#     print(ask("删除笔记助手"))
-#     print(ask("回答问题：笔记助手是什么？"))
-#     print(ask("回答问题：笔记助手有什么功能？"))
-#     print(ask("回答问题：笔记助手怎么使用？"))
 #     print(ask("回答问题：笔记助手怎么使用？"))

@@ -6,8 +6,7 @@ import sys
 import gc
 import shutil
 import time
-from chromadb import Key
-from chromadb.types import C
+
 from .config import (
     MOONSHOT_MODEL,
     MOONSHOT_API_KEY,

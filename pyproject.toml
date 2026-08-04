@@ -11,6 +11,14 @@ dependencies = [
     "langchain-chroma>=1.1.0",
     "langchain-community>=0.4.2",
     "langchain-openai>=1.4.1",
+    "langgraph>=1.2.9",
+    "langgraph-checkpoint-sqlite>=3.1.1",
     "python-dotenv>=1.2.2",
     "unstructured>=0.24.1",
+]
+
+[dependency-groups]
+dev = [
+    "ipython>=9.15.0",
+    "jupyter>=1.1.1",
 ]
