@@ -5,6 +5,9 @@
 		},
 		{
 			"path": "../../llmops/llmops-api"
+		},
+		{
+			"path": "../../langchain_project"
 		}
 	],
 	"settings": {}

@@ -1,0 +1,46 @@
+{
+  "description": "笔记助手黄金集（迷你评测）。must_include：答案里应出现的关键词（小写不敏感）。",
+  "cases": [
+    {
+      "id": "rag_001",
+      "type": "rag",
+      "question": "什么是RAG？",
+      "must_include": ["检索", "生成"],
+      "must_not_include": [],
+      "note": "应能从笔记讲清检索增强生成"
+    },
+    {
+      "id": "rag_002",
+      "type": "rag",
+      "question": "Chroma适合做什么？",
+      "must_include": ["向量"],
+      "must_not_include": [],
+      "note": "向量库相关"
+    },
+    {
+      "id": "rag_003",
+      "type": "rag",
+      "question": "Python基础里列表和字典分别适合存什么？",
+      "must_include": ["列表"],
+      "must_not_include": [],
+      "note": "Python basics"
+    },
+    {
+      "id": "rag_004",
+      "type": "rag",
+      "question": "今天苏州天气怎么样？",
+      "must_include": [],
+      "must_include_any": ["没有", "未找到", "无关", "无法"],
+      "must_not_include": [],
+      "note": "笔记无关问题，期望拒绝瞎编"
+    },
+    {
+      "id": "rag_005",
+      "type": "rag",
+      "question": "LangChain解决什么问题？",
+      "must_include": ["langchain"],
+      "must_not_include": [],
+      "note": "框架定位"
+    }
+  ]
+}

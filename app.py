@@ -58,8 +58,17 @@ def chat(message: str, history: list, session_id: str):
             ):
                 reset_after_tools = True
                 continue
+            # 只消费增量 chunk，避免完整 AIMessage 全文再拼一次
+            if not isinstance(chunk, AIMessageChunk):
+                continue
             text = _chunk_text(chunk)
             if not text:
+                continue
+            if reply and text.startswith(reply):
+                text = text[len(reply) :]
+                if not text:
+                    continue
+            elif reply and reply.startswith(text) and text != reply:
                 continue
             if reset_after_tools:
                 reply = ""
@@ -184,10 +193,15 @@ if __name__ == "__main__":
     os.environ["NO_PROXY"] = "127.0.0.1,localhost,::1"
     os.environ["no_proxy"] = "127.0.0.1,localhost,::1"
 
+    # Docker 里请设 GRADIO_SERVER_NAME=0.0.0.0
+    server_name = os.getenv("GRADIO_SERVER_NAME", "127.0.0.1")
+    server_port = int(os.getenv("GRADIO_SERVER_PORT", "7860"))
+    inbrowser = os.getenv("GRADIO_INBROWSER", "1") not in ("0", "false", "False")
+
     create_interface().launch(
-        server_name="127.0.0.1",
-        server_port=7860,
+        server_name=server_name,
+        server_port=server_port,
         share=False,
-        inbrowser=True,
+        inbrowser=inbrowser,
         theme=gr.themes.Soft(),
     )

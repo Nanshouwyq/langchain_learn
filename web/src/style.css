@@ -1,0 +1,196 @@
+@import "tailwindcss";
+
+:root {
+  --ink: #0f1c2e;
+  --paper: #f4f0e8;
+  --accent: #0f766e;
+  --accent-soft: #ccfbf1;
+  --line: #d6d0c4;
+  font-family: "Source Sans 3", "PingFang SC", "Hiragino Sans GB",
+    "Microsoft YaHei", sans-serif;
+  color: var(--ink);
+  background: var(--paper);
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#app {
+  margin: 0;
+  min-height: 100%;
+}
+
+body {
+  min-height: 100vh;
+  background:
+    radial-gradient(circle at top left, rgba(15, 118, 110, 0.08), transparent 40%),
+    linear-gradient(180deg, #f7f3eb 0%, #efe8dc 100%);
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+/* Ant Design 按钮：图标与文字水平垂直居中对齐 */
+.ant-btn {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 6px;
+  line-height: 1 !important;
+}
+
+.ant-btn > .anticon,
+.ant-btn .ant-btn-icon {
+  display: inline-flex;
+  align-items: center;
+  line-height: 1;
+}
+
+.ant-btn > .anticon + span,
+.ant-btn .ant-btn-icon + span {
+  margin-inline-start: 0 !important;
+  line-height: 1;
+}
+
+/* 聊天气泡 Markdown */
+.md-body {
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.md-body > :first-child {
+  margin-top: 0;
+}
+
+.md-body > :last-child {
+  margin-bottom: 0;
+}
+
+.md-body p,
+.md-body ul,
+.md-body ol,
+.md-body pre,
+.md-body blockquote,
+.md-body table {
+  margin: 0.55em 0;
+}
+
+.md-body h1,
+.md-body h2,
+.md-body h3,
+.md-body h4 {
+  margin: 0.75em 0 0.4em;
+  font-weight: 650;
+  line-height: 1.35;
+}
+
+.md-body h1 {
+  font-size: 1.25em;
+}
+
+.md-body h2 {
+  font-size: 1.15em;
+}
+
+.md-body h3 {
+  font-size: 1.05em;
+}
+
+.md-body ul,
+.md-body ol {
+  padding-left: 1.35em;
+}
+
+.md-body li + li {
+  margin-top: 0.2em;
+}
+
+.md-body a {
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.md-body code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 0.9em;
+  padding: 0.12em 0.35em;
+  border-radius: 4px;
+}
+
+.md-body pre {
+  overflow-x: auto;
+  padding: 0.75rem 0.9rem;
+  border-radius: 10px;
+  font-size: 0.86em;
+  line-height: 1.55;
+}
+
+.md-body pre code {
+  padding: 0;
+  background: transparent;
+  border-radius: 0;
+  font-size: inherit;
+}
+
+.md-body blockquote {
+  margin-left: 0;
+  padding-left: 0.85em;
+  border-left: 3px solid currentColor;
+  opacity: 0.9;
+}
+
+.md-body table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.92em;
+}
+
+.md-body th,
+.md-body td {
+  border: 1px solid currentColor;
+  padding: 0.35em 0.55em;
+}
+
+.md-body--assistant code {
+  background: #f0ebe1;
+  color: #0f1c2e;
+}
+
+.md-body--assistant pre {
+  background: #f4f0e8;
+  border: 1px solid #e2dccf;
+}
+
+.md-body--assistant a {
+  color: #0f766e;
+}
+
+.md-body--user code {
+  background: rgba(255, 255, 255, 0.16);
+  color: inherit;
+}
+
+.md-body--user pre {
+  background: rgba(0, 0, 0, 0.22);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.md-body--user a {
+  color: #99f6e4;
+}
+
+.md-body--system {
+  opacity: 0.95;
+}
+
+.md-body--system code {
+  background: #efe8dc;
+}

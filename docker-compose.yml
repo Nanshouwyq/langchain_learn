@@ -1,0 +1,62 @@
+# 最小 docker-compose
+# 用法：
+#   1. 准备好项目根目录 .env（含 MOONSHOT_* / SILICONFLOW_*）
+#   2. docker compose up --build
+#   3. API:  http://127.0.0.1:8000/docs
+#      Web:  http://127.0.0.1:7860   （profile=web 时）
+#
+# 只起 API：
+#   docker compose up --build api
+# API + Gradio：
+#   docker compose --profile web up --build
+
+services:
+  api:
+    build: .
+    container_name: note-assistant-api
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    environment:
+      PYTHONDONTWRITEBYTECODE: "1"
+      # 容器里一般不需要本机代理
+      HTTP_PROXY: ""
+      HTTPS_PROXY: ""
+      ALL_PROXY: ""
+      http_proxy: ""
+      https_proxy: ""
+      all_proxy: ""
+      NO_PROXY: "127.0.0.1,localhost,::1"
+    volumes:
+      # 笔记与向量库持久化到宿主机，容器删了数据还在
+      - ./notes:/app/notes
+      - ./vectorstore:/app/vectorstore
+    command: ["uv", "run", "uvicorn", "api.main:app", "--host", "0.0.0.0", "--port", "8000"]
+    restart: unless-stopped
+
+  web:
+    profiles: ["web"]
+    build: .
+    container_name: note-assistant-web
+    ports:
+      - "7860:7860"
+    env_file:
+      - .env
+    environment:
+      PYTHONDONTWRITEBYTECODE: "1"
+      GRADIO_SERVER_NAME: "0.0.0.0"
+      GRADIO_SERVER_PORT: "7860"
+      GRADIO_INBROWSER: "0"
+      HTTP_PROXY: ""
+      HTTPS_PROXY: ""
+      ALL_PROXY: ""
+      http_proxy: ""
+      https_proxy: ""
+      all_proxy: ""
+      NO_PROXY: "127.0.0.1,localhost,::1"
+    volumes:
+      - ./notes:/app/notes
+      - ./vectorstore:/app/vectorstore
+    command: ["uv", "run", "python", "app.py"]
+    restart: unless-stopped

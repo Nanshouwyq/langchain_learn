@@ -36,21 +36,38 @@ from langchain_core.output_parsers import StrOutputParser
 from langchain_core.runnables import RunnablePassthrough
 
 _llm = None
+_llm_sync = None
 _embedding_model = None
 _rag_chain = None
+_rag_chain_stream = None
 _vectorstore_checked_ok = False
 
 
-def get_llm() -> ChatOpenAI:
-    global _llm
-    if _llm is None:
-        _llm = ChatOpenAI(
+def get_llm(*, streaming: bool = True) -> ChatOpenAI:
+    """
+    streaming=True：Agent / RAG 流式输出。
+    streaming=False：改写查询等不需要流式的场景。
+    """
+    global _llm, _llm_sync
+    if streaming:
+        if _llm is None:
+            _llm = ChatOpenAI(
+                model=MOONSHOT_MODEL,
+                api_key=MOONSHOT_API_KEY,
+                base_url=MOONSHOT_BASE_URL,
+                temperature=1,
+                streaming=True,
+            )
+        return _llm
+    if _llm_sync is None:
+        _llm_sync = ChatOpenAI(
             model=MOONSHOT_MODEL,
             api_key=MOONSHOT_API_KEY,
             base_url=MOONSHOT_BASE_URL,
             temperature=1,
+            streaming=False,
         )
-    return _llm
+    return _llm_sync
 
 
 # 获取嵌入模型
@@ -68,8 +85,9 @@ def get_embedding_model() -> OpenAIEmbeddings:
 
 def _invalidate_rag_cache():
     """笔记变更 / 重建向量库后清空缓存"""
-    global _rag_chain, _vectorstore_checked_ok
+    global _rag_chain, _rag_chain_stream, _vectorstore_checked_ok
     _rag_chain = None
+    _rag_chain_stream = None
     _vectorstore_checked_ok = False
 
 
@@ -136,9 +154,9 @@ def rewrite_query_for_retrieval(question: str) -> str:
     )
 
     try:
-        rewritten_question = (prompt | get_llm() | StrOutputParser()).invoke(
-            {"question": question}
-        )
+        rewritten_question = (
+            prompt | get_llm(streaming=False) | StrOutputParser()
+        ).invoke({"question": question})
     except Exception as e:
         print(f"改写用户问题失败: {e}")
         return question
@@ -289,9 +307,13 @@ def rebuild_vectorstore():
     return vectorstore
 
 
-def build_rag_chain():
-    """构建面向笔记问答的RAG链（带缓存，避免每次问答都重新连库）"""
-    global _rag_chain
+def build_rag_chain(*, streaming: bool = False):
+    """构建面向笔记问答的RAG链（带缓存，避免每次问答都重新连库）
+
+    streaming=False：工具 / invoke 用，避免嵌套流式 token 泄漏进 Agent 流
+    streaming=True：/rag/stream 用，真正逐 token 输出
+    """
+    global _rag_chain, _rag_chain_stream
     # 当没有笔记时，清空本地向量库并返回NONE
     if not list(NOTES_DIR.rglob("*.md")):
         clear_vector_store()
@@ -299,8 +321,10 @@ def build_rag_chain():
     # 日常问答只读取本地向量库：首次使用或者文档变更时，再统一全量重建一次
     if vectorstore_need_rebuild():
         rebuild_vectorstore()
-    if _rag_chain is not None:
-        return _rag_chain
+
+    cached = _rag_chain_stream if streaming else _rag_chain
+    if cached is not None:
+        return cached
 
     # 读取chroma db内容
     vectorstore = Chroma(
@@ -321,30 +345,35 @@ def build_rag_chain():
        
         """
     )
-    # 返回构建的RAG链
-    _rag_chain = (
+    chain = (
         {
-            # lambda 是「匿名函数」：写法为 lambda 参数: 表达式，相当于临时定义一个小函数。
-            # 下面这行意思是：拿到 question 后，调用 _build_retrieval_context(question) 作为 context。
-            # 其实也可以直接写成 "context": _build_retrieval_context,（效果相同）
             "context": lambda question: _build_retrieval_context(
                 question, retriver=retriever
             ),
             "question": RunnablePassthrough(),
         }
         | prompt
-        | get_llm()
+        | get_llm(streaming=streaming)
         | StrOutputParser()
     )
-    return _rag_chain
+    if streaming:
+        _rag_chain_stream = chain
+    else:
+        _rag_chain = chain
+    return chain
 
 
 def ask_notes(question: str) -> str:
-    """基于笔记内容回答问题"""
-    rag_chain = build_rag_chain()
+    """基于笔记回答。使用 stream 聚合，以便在 Agent 流式接口里透出 token。"""
+    rag_chain = build_rag_chain(streaming=True)
     if rag_chain is None:
         return "当前没有可检索的笔记，请先创建或者准备一些笔记内容"
-    return rag_chain.invoke(question)
+    parts: list[str] = []
+    for text in rag_chain.stream(question):
+        print(text, flush=True)
+        if text:
+            parts.append(text)
+    return "".join(parts) if parts else "暂时没有得到有效回复"
 
 
 # if __name__ == "__main__":

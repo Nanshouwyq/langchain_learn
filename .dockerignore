@@ -1,0 +1,20 @@
+# 构建上下文里不要带进这些（加快构建、减小镜像）
+.venv/
+.git/
+__pycache__/
+**/__pycache__/
+*.pyc
+.pytest_cache/
+.mypy_cache/
+.DS_Store
+.env
+*.log
+note_assistant/eval/last_report.json
+chroma_db/
+study/
+.cursor/
+canvases/
+agent/
+ai_chatbot/
+mcp/
+*.sqlite

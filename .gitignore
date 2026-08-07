@@ -12,3 +12,4 @@ wheels/
 # Secrets & local
 .env
 .DS_Store
+note_assistant/eval/last_report.json
