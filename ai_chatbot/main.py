@@ -1,54 +1,43 @@
+"""多专家客服 LangGraph CLI Demo。
+
+用法（项目根目录）：
+  python -m ai_chatbot.main
+"""
+
+from __future__ import annotations
+
 from typing import Literal
-from langgraph.graph import StateGraph, START, END
+
 from langgraph.checkpoint.memory import MemorySaver
-from agents import (
-    route_question,
-    route_by_type,
+from langgraph.graph import END, START, StateGraph
+
+from ai_chatbot.agents import (
+    human_review,
     order_agent,
     product_agent,
+    route_by_type,
+    route_question,
     service_agent,
     tech_agent,
-    human_review,
 )
-from state import CustomerServiceState
-import pprint
-
-
-def init_state(user_question: str, user_id: str) -> CustomerServiceState:
-    return {
-        "user_id": user_id,
-        "user_question": user_question,
-        "query_type": "",
-        "order_result": "",
-        "product_result": "",
-        "service_result": "",
-        "tech_result": "",
-        "message": [],
-        "final_response": "",
-    }
+from ai_chatbot.service import init_state
+from ai_chatbot.state import CustomerServiceState
 
 
 def need_review(state: CustomerServiceState) -> Literal["review", "end"]:
-    if state["needs_review"]:
+    if state.get("needs_review"):
         return "review"
-    else:
-        return "end"
+    return "end"
 
 
-# 多agent
-def chatbot_graph() -> CustomerServiceState:
-    """
-    聊天机器人流程图
-    """
+def chatbot_graph():
     graph = StateGraph(CustomerServiceState)
-    # 添加节点
     graph.add_node("route", route_question)
     graph.add_node("order", order_agent)
     graph.add_node("product", product_agent)
     graph.add_node("service", service_agent)
     graph.add_node("tech", tech_agent)
     graph.add_node("review", human_review)
-    # 添加边
     graph.add_edge(START, "route")
     graph.add_conditional_edges(
         "route",
@@ -65,29 +54,18 @@ def chatbot_graph() -> CustomerServiceState:
     graph.add_conditional_edges(
         "service",
         need_review,
-        {
-            "review": "review",
-            "end": END,
-        },
+        {"review": "review", "end": END},
     )
     graph.add_edge("tech", END)
     graph.add_edge("review", END)
-    app = graph.compile(checkpointer=MemorySaver(), interrupt_before=["review"])
-    return app
+    return graph.compile(checkpointer=MemorySaver(), interrupt_before=["review"])
 
 
 if __name__ == "__main__":
-    config = {"configurable": {"thread_id": "1234567890"}}
+    config = {"configurable": {"thread_id": "demo-thread"}}
     app = chatbot_graph()
-    state = init_state("我想退货", "1234567890")
+    state = init_state("这个充电器支持多少瓦快充？", "u001")
     for chunk in app.stream(state, config=config, stream_mode="updates"):
         print(chunk)
-    print("-" * 100)
-
-    paused_state = app.get_state(config=config)
-    print(paused_state.next)
-    print(paused_state.values["final_response"])
-    print("++++++++")
-    result = app.invoke(None, config=config)
-    print(result["final_response"])
-    print(result["message"])
+    print("-" * 40)
+    print(app.get_state(config).values.get("final_response"))

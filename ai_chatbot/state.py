@@ -11,7 +11,7 @@ class CustomerServiceState(TypedDict):
 
     # 提供不同的专家Agent的结果
     order_result: str
-    payment_result: str
+    product_result: str
     service_result: str
     tech_result: str
 

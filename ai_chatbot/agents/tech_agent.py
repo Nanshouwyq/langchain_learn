@@ -1,13 +1,9 @@
-from config import llm
-from state import CustomerServiceState
+from ai_chatbot.config import llm
+from ai_chatbot.state import CustomerServiceState
 
 
-def tech_agent(state: CustomerServiceState) -> CustomerServiceState:
-    """
-    技术相关问题的处理
-    """
+def tech_agent(state: CustomerServiceState) -> dict:
     tech_info = "常见问题：设备无法开机-》检查电源，长按电源键10秒重启"
-
     prompt = f"""
      你是技术查询助手
      用户问题：{state['user_question']}
@@ -15,7 +11,6 @@ def tech_agent(state: CustomerServiceState) -> CustomerServiceState:
      请根据技术信息礼貌，负责回答用户问题
     """
     response = llm().invoke(prompt)
-
     return {
         "tech_result": response.content.strip(),
         "message": [

@@ -69,7 +69,19 @@ python -m note_assistant.eval.export_traces --run-id <trace或root的run_id>
 - LangSmith：默认 dataset 名 `note-assistant-eval`（`inputs.question` + `outputs.must_include*`）
 - 改 Prompt / TopK / 切分后重跑，对比 `pass_rate`
 
-## FastAPI 骨架
+## AI Chatbot（多专家客服 · 流式）
+
+```bash
+# 后端 :8001
+uvicorn ai_chatbot.api:app --reload --host 127.0.0.1 --port 8001
+
+# 前端 :5174
+cd ai_chatbot/web && pnpm install && pnpm dev
+```
+
+详见 `ai_chatbot/README.md`。
+
+## FastAPI 骨架（笔记助手）
 
 ```bash
 uv sync   # 确保 fastapi / uvicorn 已安装
