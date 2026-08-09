@@ -1,7 +1,5 @@
 # RAG检索链构建
-from http import client
 from pathlib import Path
-from pydoc import cli
 import sys
 import gc
 import shutil
@@ -11,6 +9,10 @@ from .config import (
     MOONSHOT_MODEL,
     MOONSHOT_API_KEY,
     MOONSHOT_BASE_URL,
+    MOONSHOT_THINKING,
+    AGENT_MAX_TOKENS,
+    RAG_MAX_TOKENS,
+    CONTEXT_MAX_CHARS,
     SILICONFLOW_MODEL,
     SILICONFLOW_API_KEY,
     SILICONFLOW_BASE_URL,
@@ -35,39 +37,49 @@ from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.runnables import RunnablePassthrough
 
-_llm = None
-_llm_sync = None
+_llm_by_purpose: dict[str, ChatOpenAI] = {}
 _embedding_model = None
 _rag_chain = None
 _rag_chain_stream = None
 _vectorstore_checked_ok = False
 
 
-def get_llm(*, streaming: bool = True) -> ChatOpenAI:
+def get_llm(*, purpose: str = "default") -> ChatOpenAI:
+    """获取对话模型（按用途缓存）。
+
+    purpose:
+      - agent：工具决策，短输出（AGENT_MAX_TOKENS）
+      - rag / default：笔记问答（RAG_MAX_TOKENS）
+
+    kimi-k2.6：thinking 与 temperature/top_p 必须对齐，否则易 20015。
     """
-    streaming=True：Agent / RAG 流式输出。
-    streaming=False：改写查询等不需要流式的场景。
-    """
-    global _llm, _llm_sync
-    if streaming:
-        if _llm is None:
-            _llm = ChatOpenAI(
-                model=MOONSHOT_MODEL,
-                api_key=MOONSHOT_API_KEY,
-                base_url=MOONSHOT_BASE_URL,
-                temperature=1,
-                streaming=True,
-            )
-        return _llm
-    if _llm_sync is None:
-        _llm_sync = ChatOpenAI(
-            model=MOONSHOT_MODEL,
-            api_key=MOONSHOT_API_KEY,
-            base_url=MOONSHOT_BASE_URL,
-            temperature=1,
-            streaming=False,
-        )
-    return _llm_sync
+    key = purpose if purpose in {"agent", "rag"} else "rag"
+    cached = _llm_by_purpose.get(key)
+    if cached is not None:
+        return cached
+
+    thinking_on = MOONSHOT_THINKING in {"1", "true", "enabled", "on"}
+    thinking_type = "enabled" if thinking_on else "disabled"
+    max_tokens = AGENT_MAX_TOKENS if key == "agent" else RAG_MAX_TOKENS
+    llm = ChatOpenAI(
+        model=MOONSHOT_MODEL,
+        api_key=MOONSHOT_API_KEY,
+        base_url=MOONSHOT_BASE_URL,
+        temperature=1.0 if thinking_on else 0.6,
+        top_p=0.95,
+        max_tokens=max_tokens,
+        extra_body={"thinking": {"type": thinking_type}},
+    )
+    _llm_by_purpose[key] = llm
+    return llm
+
+
+def reset_llm_clients() -> None:
+    """热重载时清空模型与 RAG 缓存。"""
+    global _llm_by_purpose, _rag_chain, _rag_chain_stream
+    _llm_by_purpose = {}
+    _rag_chain = None
+    _rag_chain_stream = None
 
 
 # 获取嵌入模型
@@ -79,6 +91,8 @@ def get_embedding_model() -> OpenAIEmbeddings:
             api_key=SILICONFLOW_API_KEY,
             base_url=SILICONFLOW_BASE_URL,
             check_embedding_ctx_length=False,
+            # SiliconFlow 对超长/过大 batch 会返回 20015，控制每批条数
+            chunk_size=16,
         )
     return _embedding_model
 
@@ -121,20 +135,44 @@ def split_documents(documents):
 
 # 使用原始用户问题得到检索结果
 def _build_retrieval_context(question: str, retriver) -> str:
-    """构建检索上下文"""
+    """构建检索上下文；同笔记多段命中时尽量拼全，减少「只出前半篇」。"""
     raw_documents = retriver.invoke(question)
     if not ENABLE_QUERY_REWRITE:
-        return "\n\n".join(document.page_content for document in raw_documents)
-
-    # 使用改写后的用户问题得到的检索结果（多一次 LLM，默认关闭以加速）
-    rewritten_question = rewrite_query_for_retrieval(question)
-    print(f"rewritten_question: {rewritten_question}")
-    if rewritten_question == question:
-        merge_documents = raw_documents
+        docs = raw_documents
     else:
-        rewritten_documents = retriver.invoke(rewritten_question)
-        merge_documents = _merge_documents(raw_documents + rewritten_documents)
-    return "\n\n".join(document.page_content for document in merge_documents)
+        # 使用改写后的用户问题得到的检索结果（多一次 LLM，默认关闭以加速）
+        rewritten_question = rewrite_query_for_retrieval(question)
+        print(f"rewritten_question: {rewritten_question}")
+        if rewritten_question == question:
+            docs = raw_documents
+        else:
+            rewritten_documents = retriver.invoke(rewritten_question)
+            docs = _merge_documents(raw_documents + rewritten_documents)
+
+    # 按来源聚合：同一笔记的多个 chunk 按出现顺序拼在一起，便于覆盖全文结构
+    by_source: dict[str, list] = {}
+    order: list[str] = []
+    for document in docs:
+        src = document.metadata.get("source") or document.metadata.get("filename") or ""
+        if src not in by_source:
+            by_source[src] = []
+            order.append(src)
+        by_source[src].append(document.page_content)
+
+    blocks = []
+    used = 0
+    for src in order:
+        name = Path(src).name if src else "note"
+        body = "\n\n".join(by_source[src])
+        block = f"### 来源: {name}\n{body}"
+        # 控制上下文长度：过长会显著拉高 RAG 生成耗时
+        if used and used + len(block) + 2 > CONTEXT_MAX_CHARS:
+            break
+        if len(block) > CONTEXT_MAX_CHARS - used:
+            block = block[: max(0, CONTEXT_MAX_CHARS - used)].rstrip() + "\n…(已截断)"
+        blocks.append(block)
+        used += len(block) + 2
+    return "\n\n".join(blocks)
 
 
 def rewrite_query_for_retrieval(question: str) -> str:
@@ -155,7 +193,7 @@ def rewrite_query_for_retrieval(question: str) -> str:
 
     try:
         rewritten_question = (
-            prompt | get_llm(streaming=False) | StrOutputParser()
+            prompt | get_llm(purpose="agent") | StrOutputParser()
         ).invoke({"question": question})
     except Exception as e:
         print(f"改写用户问题失败: {e}")
@@ -334,16 +372,18 @@ def build_rag_chain(*, streaming: bool = False):
     )
     retriever = vectorstore.as_retriever(search_kwargs={"k": RETEIEVER_K})
     prompt = ChatPromptTemplate.from_template(
-        """
-         你是一个学习助手，根据检索到的笔记回答问题:
-        检索到的笔记内容：{context}
-        问题: {question}
-        请先判断哪些片段和问题最相关，忽略无关内容。
-        如果检索内容里有相关问题的定义或者实例，请直接引用，不要用自己的话重复。
-        如果笔记中没有相关信息，请明确告知用户
-        回答尽量简洁。
-       
-        """
+        """你是学习助手，只依据检索笔记回答。
+
+笔记：
+{context}
+
+问题：{question}
+
+要求：
+1. 直答要点，控制在约 300～500 字；需要时用短列表。
+2. 关键定义/代码可简短引用，不要大段原文粘贴，不要铺开无关小节。
+3. 笔记没有相关信息时明确说没有，不要编造。
+"""
     )
     chain = (
         {
@@ -353,7 +393,7 @@ def build_rag_chain(*, streaming: bool = False):
             "question": RunnablePassthrough(),
         }
         | prompt
-        | get_llm(streaming=streaming)
+        | get_llm(purpose="rag")
         | StrOutputParser()
     )
     if streaming:
@@ -364,16 +404,20 @@ def build_rag_chain(*, streaming: bool = False):
 
 
 def ask_notes(question: str) -> str:
-    """基于笔记回答。使用 stream 聚合，以便在 Agent 流式接口里透出 token。"""
+    """基于笔记回答。
+
+    使用 stream 聚合：在 Agent 的 messages 流里可透出 token（改善首字等待），
+    同时仍返回完整字符串给 ToolMessage。
+    """
     rag_chain = build_rag_chain(streaming=True)
     if rag_chain is None:
         return "当前没有可检索的笔记，请先创建或者准备一些笔记内容"
     parts: list[str] = []
     for text in rag_chain.stream(question):
-        print(text, flush=True)
         if text:
             parts.append(text)
-    return "".join(parts) if parts else "暂时没有得到有效回复"
+    joined = "".join(parts).strip()
+    return joined if joined else "暂时没有得到有效回复"
 
 
 # if __name__ == "__main__":

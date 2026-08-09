@@ -1,5 +1,5 @@
 {
-  "description": "笔记助手黄金集（迷你评测）。must_include：答案里应出现的关键词（小写不敏感）。",
+  "description": "笔记助手黄金集（迷你评测）。must_include：答案里应出现的关键词（小写不敏感）。type=rag 走 ask_notes；type=agent 走 Agent 工具（增删改查）。",
   "cases": [
     {
       "id": "rag_001",
@@ -41,6 +41,76 @@
       "must_include": ["langchain"],
       "must_not_include": [],
       "note": "框架定位"
+    },
+    {
+      "id": "crud_list_001",
+      "type": "agent",
+      "question": "列出当前所有笔记",
+      "must_include": ["共找到", "笔记"],
+      "must_include_any": ["RAG", "langchain", "FastAPI", "Python"],
+      "must_not_include": [],
+      "note": "查：列出笔记"
+    },
+    {
+      "id": "crud_read_001",
+      "type": "agent",
+      "question": "根据我的笔记回答：FastAPI 是什么？",
+      "must_include": ["fastapi"],
+      "must_not_include": [],
+      "note": "查：基于笔记问答"
+    },
+    {
+      "id": "crud_create_001",
+      "type": "agent",
+      "question": "请创建一篇笔记：标题是「评测临时笔记」，内容是「这是评测创建的内容」，标签写「评测,临时」",
+      "must_include": ["创建成功"],
+      "must_not_include": ["已存在"],
+      "cleanup_title": "评测临时笔记",
+      "note": "增：创建笔记"
+    },
+    {
+      "id": "crud_update_001",
+      "type": "agent",
+      "setup_title": "评测更新笔记",
+      "setup_content": "原始内容，待更新",
+      "setup_tags": "评测",
+      "question": "请把标题为「评测更新笔记」的笔记内容更新为「内容已更新为评测新版本」",
+      "must_include": ["更新成功"],
+      "must_not_include": ["不存在"],
+      "cleanup_title": "评测更新笔记",
+      "note": "改：更新笔记"
+    },
+    {
+      "id": "crud_delete_001",
+      "type": "agent",
+      "setup_title": "评测删除笔记",
+      "setup_content": "这篇笔记将被删除",
+      "setup_tags": "评测",
+      "question": "请删除标题为「评测删除笔记」的笔记",
+      "must_include": ["删除成功"],
+      "must_not_include": ["不存在", "无法删除"],
+      "cleanup_title": "评测删除笔记",
+      "note": "删：删除笔记"
+    },
+    {
+      "id": "crud_create_dup_001",
+      "type": "agent",
+      "setup_title": "评测重复笔记",
+      "setup_content": "已存在的评测笔记",
+      "setup_tags": "评测",
+      "question": "请创建一篇笔记：标题是「评测重复笔记」，内容是「重复创建」，标签写「评测」",
+      "must_include_any": ["已存在", "请使用其他标题", "更新笔记"],
+      "must_not_include": [],
+      "cleanup_title": "评测重复笔记",
+      "note": "增：重复创建应提示已存在"
+    },
+    {
+      "id": "crud_delete_missing_001",
+      "type": "agent",
+      "question": "请删除标题为「根本不存在的评测笔记xyz」的笔记",
+      "must_include_any": ["不存在", "无法删除"],
+      "must_not_include": ["删除成功"],
+      "note": "删：删除不存在的笔记"
     }
   ]
 }

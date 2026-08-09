@@ -43,15 +43,30 @@ python app.py
 ## 评测迷你版
 
 ```bash
-# 跑黄金集（默认 ask_notes / 纯 RAG）
+# 跑黄金集（默认全部：RAG + Agent 增删改查）
 python -m note_assistant.eval.run_eval
+
+# 只跑 RAG / 只跑 Agent
+python -m note_assistant.eval.run_eval --type rag
+python -m note_assistant.eval.run_eval --type agent
 
 # 只跑前 2 条（冒烟）
 python -m note_assistant.eval.run_eval --limit 2
+
+# 同步到 LangSmith Dataset（需 LANGSMITH_API_KEY）
+python -m note_assistant.eval.upload_langsmith
+python -m note_assistant.eval.upload_langsmith --replace   # 覆盖同名 dataset
+
+# 把 LangSmith tracing 导出到本地分析（延迟拆分）
+python -m note_assistant.eval.export_traces
+python -m note_assistant.eval.export_traces --limit 10 --days 1
+python -m note_assistant.eval.export_traces --run-id <trace或root的run_id>
 ```
 
 - 用例：`note_assistant/eval/eval_cases.json`（可按回答风格改 `must_include`）
 - 报告：`note_assistant/eval/last_report.json`
+- 导出 traces：`note_assistant/eval/traces/<时间戳>/`（`summary.json` + `latency_by_name.json`）
+- LangSmith：默认 dataset 名 `note-assistant-eval`（`inputs.question` + `outputs.must_include*`）
 - 改 Prompt / TopK / 切分后重跑，对比 `pass_rate`
 
 ## FastAPI 骨架

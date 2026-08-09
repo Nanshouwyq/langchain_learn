@@ -43,7 +43,7 @@ def create_note(title: str, content: str, tags: str) -> str:
 
 
 # 列出所有笔记
-@tool
+@tool(return_direct=True)
 def list_notes(tag: str = "") -> str:
     """列出所有笔记，可按标签过滤"""
     note_paths = sorted(NOTES_DIR.rglob("*.md"))
@@ -96,8 +96,8 @@ def delete_note(title: str) -> str:
     return f"笔记删除成功: {title}\n {_refresh_knowledge_base()}"
 
 
-# 问题
-@tool
+# 基于笔记问答：结果直接作为最终回复，不再二次进 model 复述
+@tool(return_direct=True)
 def answer_from_notes(question: str) -> str:
     """回答问题"""
     return ask_notes(question.strip())

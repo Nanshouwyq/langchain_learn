@@ -13,3 +13,4 @@ wheels/
 .env
 .DS_Store
 note_assistant/eval/last_report.json
+note_assistant/eval/traces/
