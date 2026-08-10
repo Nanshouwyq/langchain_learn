@@ -69,6 +69,8 @@ python -m note_assistant.eval.export_traces --run-id <trace或root的run_id>
 - LangSmith：默认 dataset 名 `note-assistant-eval`（`inputs.question` + `outputs.must_include*`）
 - 改 Prompt / TopK / 切分后重跑，对比 `pass_rate`
 
+面试复习（苏州 AI 应用岗问答）：`note_assistant/面试_AI应用工程师_问答.md`
+
 ## AI Chatbot（多专家客服 · 流式）
 
 ```bash
